@@ -29,6 +29,3 @@ jobs:
 
       - name: Syntax check
         run: python -m py_compile skills/pr-review/main.py skills/pr-review/github.py skills/pr-review/reviewer.py skills/pr-review/debater.py skills/pr-review/fixer.py
-
-# ci-web.yml will be added in Phase 5 (apps/web) with paths: ['apps/web/**']
-# ci-api.yml will be added in Phase 4 (apps/api) with paths: ['apps/api/**']
