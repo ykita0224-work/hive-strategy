@@ -45,7 +45,13 @@ If `--branch` or `--worktree` is present → **Mode A** (manual). Otherwise → 
 | `BRANCH` | `feature/<SLUG>` | `--branch` value |
 | `WORKTREE` | `<repo-root>/worktrees/<SLUG>` | `--worktree` value |
 
-Repo root is `/Users/yoshi/Experiment/ade/hive-strategy`.
+Repo root is determined at runtime:
+
+```bash
+git rev-parse --show-toplevel
+```
+
+Store the result as `<REPO_ROOT>` and use it wherever the table above references `<repo-root>`.
 
 ---
 
@@ -54,6 +60,18 @@ Repo root is `/Users/yoshi/Experiment/ade/hive-strategy`.
 Run from repo root:
 
 ```bash
+# Guard: abort if the branch already exists locally
+if git show-ref --verify --quiet refs/heads/<BRANCH>; then
+  echo "Branch <BRANCH> already exists. Use --branch to choose a different name."
+  exit 1
+fi
+
+# Guard: abort if the worktree path already exists on disk
+if [ -e <WORKTREE> ]; then
+  echo "Worktree path <WORKTREE> already exists. Use --worktree to choose a different path."
+  exit 1
+fi
+
 git fetch origin
 git checkout -b <BRANCH> origin/<BASE>
 git worktree add <WORKTREE> <BRANCH>
@@ -75,7 +93,7 @@ Read existing code before editing. Do only what the task requires — no extra f
 git -C <WORKTREE> add -A
 git -C <WORKTREE> commit -m "<concise description>
 
-Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
+Co-Authored-By: Claude <noreply@anthropic.com>"
 git -C <WORKTREE> push -u origin <BRANCH>
 ```
 
@@ -86,6 +104,7 @@ git -C <WORKTREE> push -u origin <BRANCH>
 ```bash
 gh pr create \
   --title "<task summary>" \
+  --head <BRANCH> \
   --base <BASE> \
   --body "$(cat <<'EOF'
 ## Summary
