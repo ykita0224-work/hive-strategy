@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 type Status = "waiting" | "thinking" | "done";
@@ -82,6 +82,7 @@ function AnalyzeContent() {
     Object.fromEntries(AGENTS.map((a) => [a.id, ""]))
   );
   const [running, setRunning] = useState(false);
+  const timerRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const allDone = AGENTS.every((a) => statuses[a.id] === "done");
 
@@ -91,14 +92,27 @@ function AnalyzeContent() {
     setStatuses(Object.fromEntries(AGENTS.map((a) => [a.id, "thinking"])));
     setTexts(Object.fromEntries(AGENTS.map((a) => [a.id, ""])));
 
+    if (AGENTS.length === 0) {
+      setRunning(false);
+      return;
+    }
+
+    timerRefs.current.forEach(clearTimeout);
+    timerRefs.current = [];
+
     AGENTS.forEach((agent, i) => {
-      setTimeout(() => {
+      const id = setTimeout(() => {
         setStatuses((prev) => ({ ...prev, [agent.id]: "done" }));
         setTexts((prev) => ({ ...prev, [agent.id]: agent.mock }));
         if (i === AGENTS.length - 1) setRunning(false);
       }, 1500 * (i + 1));
+      timerRefs.current.push(id);
     });
   };
+
+  useEffect(() => {
+    return () => { timerRefs.current.forEach(clearTimeout); };
+  }, []);
 
   useEffect(() => {
     if (!idea) router.replace("/");

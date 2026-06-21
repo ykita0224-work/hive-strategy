@@ -3,13 +3,22 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+const MAX_IDEA_LENGTH = 2000;
+
 export default function Home() {
   const [idea, setIdea] = useState("");
+  const [error, setError] = useState("");
   const router = useRouter();
 
   const handleStart = () => {
-    if (!idea.trim()) return;
-    router.push(`/analyze?idea=${encodeURIComponent(idea.trim())}`);
+    const trimmed = idea.trim();
+    if (!trimmed) return;
+    if (trimmed.length > MAX_IDEA_LENGTH) {
+      setError(`Please keep your idea under ${MAX_IDEA_LENGTH.toLocaleString()} characters.`);
+      return;
+    }
+    setError("");
+    router.push(`/analyze?idea=${encodeURIComponent(trimmed)}`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -32,12 +41,14 @@ export default function Home() {
         <div className="w-full flex flex-col gap-4">
           <textarea
             value={idea}
-            onChange={(e) => setIdea(e.target.value)}
+            onChange={(e) => { setIdea(e.target.value); if (error) setError(""); }}
             onKeyDown={handleKeyDown}
             placeholder="Describe your product idea..."
             rows={5}
+            maxLength={MAX_IDEA_LENGTH}
             className="w-full bg-zinc-900 text-white placeholder-zinc-600 border border-zinc-800 rounded-xl px-5 py-4 text-base resize-none focus:outline-none focus:border-zinc-600 transition-colors"
           />
+          {error && <p className="text-red-400 text-sm">{error}</p>}
           <button
             onClick={handleStart}
             disabled={!idea.trim()}
