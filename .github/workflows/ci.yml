@@ -1,55 +1,34 @@
-name: CI
+name: CI — Skills
 
 on:
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'skills/**'
   push:
     branches: [develop]
+    paths:
+      - 'skills/**'
 
 jobs:
-  web:
-    name: Web — Lint & Type Check
+  skills:
+    name: Syntax & Import Check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: apps/web/pnpm-lock.yaml
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-
-  api:
-    name: API — Lint & Type Check
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install uv
         run: pip install uv
 
-      - run: uv sync
+      - name: Install dependencies
+        run: uv pip install -r skills/pr-review/requirements.txt --system
 
-      - name: Lint
-        run: uv run ruff check .
+      - name: Syntax check
+        run: python -m py_compile skills/pr-review/main.py skills/pr-review/github.py skills/pr-review/reviewer.py skills/pr-review/debater.py skills/pr-review/fixer.py
 
-      - name: Type check
-        run: uv run mypy .
+# ci-web.yml will be added in Phase 5 (apps/web) with paths: ['apps/web/**']
+# ci-api.yml will be added in Phase 4 (apps/api) with paths: ['apps/api/**']
