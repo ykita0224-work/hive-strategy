@@ -11,18 +11,28 @@ REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 
 Stop immediately if there is no open PR on this branch.
 
-Fetch open top-level comments (not yet replied to):
+Fetch **all** review comments (open and resolved), preserving thread structure:
 
 ```bash
 gh api repos/$REPO/pulls/$PR/comments \
-  --jq '[.[] | select(.in_reply_to_id == null) | {id: .id, path: .path, line: .line, body: .body}]'
+  --jq '[.[] | {id: .id, path: .path, line: .line, body: .body, in_reply_to_id: .in_reply_to_id, created_at: .created_at, user: .user.login}]'
 ```
 
-If there are no open comments, tell me and stop.
+If there are no open top-level comments (`in_reply_to_id == null`), tell me and stop.
+
+## Step 1b — Detect circular reviews
+
+Group all comments by thread (root comment + its replies, linked via `in_reply_to_id`). For each thread on the same `path` + `line`:
+
+1. Read the thread chronologically.
+2. Extract what each round suggested: e.g. round 1 → "use A", round 2 (after fix) → "use B", round 3 → "use A again".
+3. A thread is **circular** if any suggestion in the current open comment is semantically equivalent to a suggestion that was already applied and later reversed by the same reviewer.
+
+Mark circular threads with decision `ARGUE_CIRCULAR` (see Step 3).
 
 ## Step 2 — Read the code
 
-For each comment, read the full file it references. Do not judge from the diff alone.
+For each open comment, read the full file it references. Do not judge from the diff alone.
 
 ## Step 3 — Decide for each comment
 
@@ -32,6 +42,12 @@ Pick exactly one response per comment:
 |---|---|---|
 | **FIX** | Reviewer is correct — real bug, real issue | Apply the code fix, post an acknowledgement reply |
 | **ARGUE** | Reviewer is wrong or the comment is out of scope / incorrect | Post a clear technical reply explaining why; no code change |
+| **ARGUE_CIRCULAR** | The reviewer is asking to revert a change they previously requested — oscillating between two positions | Post a reply quoting the contradiction and asking the reviewer to decide definitively; no code change |
+
+For `ARGUE_CIRCULAR`, the reply must:
+- Quote the earlier contradicting suggestion (with approximate date/round).
+- State what was implemented based on that suggestion.
+- Ask the reviewer to pick one direction and resolve the other thread.
 
 ## Step 4 — Show me the plan (do NOT act yet)
 
