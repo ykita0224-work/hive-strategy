@@ -47,7 +47,7 @@ def main() -> None:
         print(f"[review] Warning: {e}", file=sys.stderr)
         post_review(
             repo, pr_number, commit_sha, [], github_token,
-            f"⚠️ Review could not be completed: {e}", files,
+            f"⚠️ Review could not be completed: {str(e)[:200]}", files,
         )
         return
     print(f"[review] {len(comments)} issue(s) found")
