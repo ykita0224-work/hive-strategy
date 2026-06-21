@@ -38,7 +38,15 @@ def main() -> None:
     print(f"[review] {len(files)} changed file(s)")
 
     commit_sha = get_pr_commit_sha(repo, pr_number, github_token)
-    summary, comments = review_diff(files, client)
+    try:
+        summary, comments = review_diff(files, client)
+    except RuntimeError as e:
+        print(f"[review] Warning: {e}", file=sys.stderr)
+        post_review(
+            repo, pr_number, commit_sha, [], github_token,
+            f"⚠️ Review could not be completed: {e}", files,
+        )
+        return
     print(f"[review] {len(comments)} issue(s) found")
 
     if not comments:
