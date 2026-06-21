@@ -41,7 +41,7 @@ export default function Home() {
         <div className="w-full flex flex-col gap-4">
           <textarea
             value={idea}
-            onChange={(e) => { setIdea(e.target.value); if (error) setError(""); }}
+            onChange={(e) => { setIdea(e.target.value); if (error && e.target.value.trim().length <= MAX_IDEA_LENGTH) setError(""); }}
             onKeyDown={handleKeyDown}
             placeholder="Describe your product idea..."
             rows={5}

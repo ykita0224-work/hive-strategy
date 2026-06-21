@@ -73,7 +73,7 @@ const STATUS_LABEL: Record<Status, string> = {
 function AnalyzeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const idea = searchParams.get("idea") ?? "";
+  const idea = (searchParams.get("idea") ?? "").slice(0, 2000);
 
   const [statuses, setStatuses] = useState<Record<string, Status>>(
     Object.fromEntries(AGENTS.map((a) => [a.id, "waiting" as Status]))
@@ -118,7 +118,7 @@ function AnalyzeContent() {
     if (!idea) router.replace("/");
   }, [idea, router]);
 
-  if (!idea) return null;
+  if (!idea) return <p className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-zinc-500">Redirecting…</p>;
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] px-4 py-12">
