@@ -60,9 +60,10 @@ Store the result as `<REPO_ROOT>` and use it wherever the table above references
 Run from repo root:
 
 ```bash
-# Guard: abort if the branch already exists locally
-if git show-ref --verify --quiet refs/heads/<BRANCH>; then
-  echo "Branch <BRANCH> already exists. Use --branch to choose a different name."
+# Guard: abort if the branch already exists locally or on origin
+if git show-ref --verify --quiet refs/heads/<BRANCH> || \
+   git show-ref --verify --quiet refs/remotes/origin/<BRANCH>; then
+  echo "Branch <BRANCH> already exists locally or on origin. Use --branch to choose a different name."
   exit 1
 fi
 
@@ -72,9 +73,8 @@ if [ -e <WORKTREE> ]; then
   exit 1
 fi
 
-git fetch origin
-git checkout -b <BRANCH> origin/<BASE>
-git worktree add <WORKTREE> <BRANCH>
+git fetch origin || { echo "git fetch failed — check network and remote name."; exit 1; }
+git worktree add -b <BRANCH> <WORKTREE> origin/<BASE>
 ```
 
 All subsequent work happens inside `<WORKTREE>`.
@@ -90,10 +90,14 @@ Read existing code before editing. Do only what the task requires — no extra f
 ## Step 4 — Commit and push
 
 ```bash
+git -C <WORKTREE> status
 git -C <WORKTREE> add -A
-git -C <WORKTREE> commit -m "<concise description>
+git -C <WORKTREE> diff --cached --stat
+git -C <WORKTREE> commit -F - <<'MSG'
+<concise description>
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+Co-Authored-By: Claude <noreply@anthropic.com>
+MSG
 git -C <WORKTREE> push -u origin <BRANCH>
 ```
 
@@ -102,11 +106,8 @@ git -C <WORKTREE> push -u origin <BRANCH>
 ## Step 5 — Open PR
 
 ```bash
-gh pr create \
-  --title "<task summary>" \
-  --head <BRANCH> \
-  --base <BASE> \
-  --body "$(cat <<'EOF'
+TMP=$(mktemp)
+cat > "$TMP" <<'EOF'
 ## Summary
 - <bullet: what changed>
 
@@ -115,7 +116,12 @@ gh pr create \
 
 🤖 Generated with Claude Code
 EOF
-)"
+gh pr create \
+  --title "<task summary>" \
+  --head <BRANCH> \
+  --base <BASE> \
+  --body-file "$TMP"
+rm -f "$TMP"
 ```
 
 Print the PR URL.
