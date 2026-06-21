@@ -23,16 +23,16 @@ Under the hood, the project is a showcase of modern DevOps: GitHub MCP wired to 
   ```
   hive-strategy/
   ├── apps/
-  │   ├── web/          # Next.js frontend
-  │   └── api/          # Node backend (Hono)
+  │   ├── web/               # Next.js frontend (own pnpm + package.json)
+  │   └── api/               # FastAPI Python backend (own uv + pyproject.toml)
   ├── packages/
-  │   └── agents/       # Shared agent runtime logic
+  │   └── agents/            # Shared agent runtime (Python)
   ├── .github/
-  │   └── workflows/    # CI pipelines
+  │   └── workflows/         # CI pipelines
   ├── .claude/
-  │   └── settings.json # Claude Code MCP config
-  ├── mcp/              # MCP server definitions
-  ├── skills/           # Agent skill modules
+  │   └── settings.json      # Claude Code MCP config
+  ├── mcp/                   # MCP server definitions
+  ├── skills/                # Agent skill modules (Python)
   └── PLAN.md
   ```
 - [ ] `pnpm` workspace
@@ -220,7 +220,7 @@ AgentOrchestrator
 | Layer | Choice | Reason |
 |---|---|---|
 | Frontend | Next.js 15 + Tailwind | SSE support, App Router streaming |
-| Backend | Node.js (Hono) | Lightweight, fast SSE, same language as frontend |
+| Backend | FastAPI (Python 3) | Richer AI/ML ecosystem, async SSE support |
 | AI | Claude Sonnet 4.6 | Best tool-use, streaming |
 | Agent SDK | Anthropic SDK + custom runtime | Full control over streaming events |
 | MCP | `@modelcontextprotocol/server-github` | Phase 1 |
