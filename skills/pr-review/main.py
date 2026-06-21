@@ -20,7 +20,7 @@ import os
 import sys
 import anthropic
 
-from github import get_pr_files, get_pr_commit_sha, post_review
+from github import get_pr_files, get_pr_commit_sha, get_existing_review_comments, post_review
 from reviewer import review_diff
 
 
@@ -37,9 +37,12 @@ def main() -> None:
     files = get_pr_files(repo, pr_number, github_token)
     print(f"[review] {len(files)} changed file(s)")
 
+    existing_comments = get_existing_review_comments(repo, pr_number, github_token)
+    print(f"[review] {len(existing_comments)} existing comment(s) from prior reviews")
+
     commit_sha = get_pr_commit_sha(repo, pr_number, github_token)
     try:
-        summary, comments = review_diff(files, client)
+        summary, comments = review_diff(files, client, existing_comments)
     except RuntimeError as e:
         print(f"[review] Warning: {e}", file=sys.stderr)
         post_review(
