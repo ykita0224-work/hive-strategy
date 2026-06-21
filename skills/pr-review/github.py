@@ -92,7 +92,8 @@ def post_review(
     token: str,
     summary: str,
     pr_files: list[PRFile],
-) -> None:
+) -> int:
+    """Post a PR review and return the review ID."""
     url = f"{GITHUB_API}/repos/{repo}/pulls/{pr_number}/reviews"
 
     # Only keep comments on lines that actually appear in the diff
@@ -124,4 +125,6 @@ def post_review(
     }
     resp = httpx.post(url, headers=_headers(token), json=body, timeout=30.0)
     resp.raise_for_status()
-    print(f"Posted review: {len(inline)} inline comment(s)")
+    review_id: int = resp.json()["id"]
+    print(f"Posted review: {len(inline)} inline comment(s) (review_id={review_id})")
+    return review_id

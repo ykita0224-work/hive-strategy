@@ -7,17 +7,20 @@ on:
 
 jobs:
   ai-review:
-    name: Claude Code Review
+    name: Claude Review + Debate + Auto-Fix
     runs-on: ubuntu-latest
-    # Skip if label 'skip-ai-review' is present
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-ai-review') }}
     permissions:
-      pull-requests: write
-      contents: read
+      pull-requests: write   # post review comments + replies
+      contents: write        # push auto-fix commits back to PR branch
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Check out the actual PR branch so we can push fixes back
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -29,8 +32,7 @@ jobs:
       - name: Install skill dependencies
         run: uv pip install -r skills/pr-review/requirements.txt --system
 
-      # Phase 2: skill implementation goes here
-      - name: Run AI Review
+      - name: Review, Debate & Auto-Fix
         run: python skills/pr-review/main.py
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
