@@ -5,22 +5,20 @@ on:
     types: [opened, synchronize]
     branches: [main, develop]
 
+# Review only — no auto-fix, no auto-push.
+# Debate and fixes happen interactively in Cursor with human approval.
 jobs:
   ai-review:
-    name: Claude Review + Debate + Auto-Fix
+    name: Claude Code Review
     runs-on: ubuntu-latest
     if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-ai-review') }}
     permissions:
-      pull-requests: write   # post review comments + replies
-      contents: write        # push auto-fix commits back to PR branch
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Check out the actual PR branch so we can push fixes back
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -32,7 +30,7 @@ jobs:
       - name: Install skill dependencies
         run: uv pip install -r skills/pr-review/requirements.txt --system
 
-      - name: Review, Debate & Auto-Fix
+      - name: Post review comments
         run: python skills/pr-review/main.py
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
