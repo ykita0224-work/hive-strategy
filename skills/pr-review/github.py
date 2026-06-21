@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 import httpx
 
 GITHUB_API = "https://api.github.com"
@@ -64,16 +65,21 @@ def get_pr_commit_sha(repo: str, pr_number: int, token: str) -> str:
     return resp.json()["head"]["sha"]
 
 
+HUNK_LINE_RE = re.compile(r"\+(\d+)")
+
+
 def get_valid_lines(patch: str) -> set[int]:
     """Return line numbers in the new file that appear in the diff hunk."""
     valid = set()
     current_line = 0
     for raw in patch.splitlines():
         if raw.startswith("@@"):
-            # e.g. @@ -10,6 +12,8 @@
-            parts = raw.split("+")
-            if len(parts) > 1:
-                current_line = int(parts[1].split(",")[0].split(" ")[0]) - 1
+            m = HUNK_LINE_RE.search(raw)
+            if m:
+                try:
+                    current_line = int(m.group(1)) - 1
+                except ValueError:
+                    continue
         elif raw.startswith("-"):
             pass  # old file line, skip
         elif raw.startswith("+"):

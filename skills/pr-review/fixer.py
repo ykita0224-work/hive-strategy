@@ -3,10 +3,19 @@ Fixer agent — Claude with file read/write tools to apply accepted review fixes
 Only runs on comments the programmer agent has accepted.
 """
 
-import os
 from pathlib import Path
 import anthropic
 from github import ReviewComment
+
+MAX_ITERS = 20
+
+
+def _safe_path(repo_root: str, path: str) -> Path:
+    root = Path(repo_root).resolve()
+    full = (root / path).resolve()
+    if not full.is_relative_to(root):
+        raise ValueError(f"Path escape attempt: {path}")
+    return full
 
 SYSTEM_PROMPT = """You are an expert software engineer applying targeted code fixes.
 You will receive files with their current content and specific issues to fix.
@@ -74,9 +83,11 @@ def fix_issues(
 
     context_parts = []
     for path, issues in by_file.items():
-        full_path = os.path.join(repo_root, path)
         try:
-            content = Path(full_path).read_text()
+            content = _safe_path(repo_root, path).read_text()
+        except ValueError as e:
+            print(f"[fixer] Skipping {path} — {e}")
+            continue
         except FileNotFoundError:
             print(f"[fixer] Skipping {path} — file not found")
             continue
@@ -97,7 +108,7 @@ def fix_issues(
         }
     ]
 
-    while True:
+    for _ in range(MAX_ITERS):
         response = client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=8096,
@@ -107,26 +118,29 @@ def fix_issues(
         )
 
         tool_calls = [b for b in response.content if b.type == "tool_use"]
-        if not tool_calls or response.stop_reason == "end_turn":
-            break
 
         results = []
         for tool in tool_calls:
             if tool.name == "read_file":
                 path = tool.input["path"]
                 try:
-                    content = Path(os.path.join(repo_root, path)).read_text()
-                    out = content
+                    out = _safe_path(repo_root, path).read_text()
+                except ValueError:
+                    out = f"Error: {path} is outside the repo root"
                 except FileNotFoundError:
                     out = f"Error: {path} not found"
                 results.append({"type": "tool_result", "tool_use_id": tool.id, "content": out})
 
             elif tool.name == "write_file":
                 path = tool.input["path"]
-                Path(os.path.join(repo_root, path)).write_text(tool.input["content"])
-                changed.append(path)
-                print(f"[fixer] Fixed {path}")
-                results.append({"type": "tool_result", "tool_use_id": tool.id, "content": f"Written: {path}"})
+                try:
+                    _safe_path(repo_root, path).write_text(tool.input["content"])
+                    changed.append(path)
+                    print(f"[fixer] Fixed {path}")
+                    out = f"Written: {path}"
+                except ValueError:
+                    out = f"Error: {path} is outside the repo root"
+                results.append({"type": "tool_result", "tool_use_id": tool.id, "content": out})
 
             elif tool.name == "mark_unfixable":
                 unfixable.append(f"{tool.input['path']}: {tool.input['reason']}")
@@ -134,6 +148,11 @@ def fix_issues(
 
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": results})
+
+        if response.stop_reason != "tool_use":
+            break
+    else:
+        print("[fixer] Hit max iterations — stopping")
 
     if unfixable:
         print(f"[fixer] Unfixable (manual required): {'; '.join(unfixable)}")

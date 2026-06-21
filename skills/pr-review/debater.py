@@ -110,10 +110,14 @@ def debate(
     gh_comments = get_review_comments(repo, pr_number, review_id, token)
     id_map = {(c["path"], c["line"]): c["id"] for c in gh_comments if c.get("line")}
 
-    # Build context for programmer agent
+    debateable = [c for c in comments if c.line and (c.path, c.line) in id_map]
+    if not debateable:
+        print("[debater] No comments with resolvable thread IDs")
+        return []
+
     comment_context = "\n".join(
-        f"[comment_id={id_map.get((c.path, c.line), 0)} path={c.path} line={c.line}]\n{c.body}"
-        for c in comments
+        f"[comment_id={id_map[(c.path, c.line)]} path={c.path} line={c.line}]\n{c.body}"
+        for c in debateable
     )
 
     message = client.messages.create(
@@ -132,14 +136,17 @@ def debate(
 
     tool_use = next((b for b in message.content if b.type == "tool_use"), None)
     if not tool_use:
-        print("[debater] No verdicts returned")
-        return comments  # default: accept all if agent fails
+        raise RuntimeError(
+            f"Model did not return a tool_use block (stop_reason={message.stop_reason!r})."
+        )
 
     verdicts = tool_use.input["verdicts"]
     accepted: list[ReviewComment] = []
 
     for v in verdicts:
-        comment_id = v["comment_id"]
+        comment_id = v.get("comment_id")
+        if not comment_id:
+            print(f"[debater] Warning: no comment_id for {v['path']}:{v.get('line')} — skipping reply")
         decision = v["decision"]
         reply_body = f"**[{'✅ Accepted' if decision == 'ACCEPT' else '💬 Argued'}]** {v['reply']}"
 
@@ -152,8 +159,8 @@ def debate(
                 print(f"[debater] Could not post reply to {comment_id}: {e}")
 
         if decision == "ACCEPT":
-            matching = [c for c in comments if c.path == v["path"] and c.line == v["line"]]
+            matching = [c for c in debateable if c.path == v["path"] and c.line == v["line"]]
             accepted.extend(matching)
 
-    print(f"[debater] {len(accepted)}/{len(comments)} comment(s) accepted for auto-fix")
+    print(f"[debater] {len(accepted)}/{len(debateable)} comment(s) accepted for auto-fix")
     return accepted
