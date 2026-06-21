@@ -1,0 +1,82 @@
+---
+description: Teaches Cursor how to participate in the reviewer-programmer debate. Use when you want to manually argue against a comment, override a verdict, or reply to a review thread from inside Cursor.
+globs:
+alwaysApply: false
+---
+
+# Participating in the PR Review Debate from Cursor
+
+The CI review pipeline posts inline comments and then has a programmer agent argue back automatically. But you (the human developer) can also participate in the debate directly from Cursor.
+
+## Fetch the current debate state
+
+Before doing anything, load the live state of the review:
+
+```bash
+PR=$(gh pr view --json number --jq .number)
+REPO=ykita0224-work/hive-strategy
+
+# All review comments (reviewer findings)
+gh api repos/$REPO/pulls/$PR/comments \
+  --jq '.[] | select(.in_reply_to_id == null) | {id: .id, path: .path, line: .line, body: .body}'
+
+# All reply threads (programmer agent verdicts)
+gh api repos/$REPO/pulls/$PR/comments \
+  --jq '.[] | select(.in_reply_to_id != null) | {reply_to: .in_reply_to_id, body: .body}'
+```
+
+## How to manually argue against a comment
+
+If the programmer agent accepted a comment but you disagree (false positive), post a reply:
+
+```bash
+gh api repos/ykita0224-work/hive-strategy/pulls/comments/<COMMENT_ID>/replies \
+  --method POST \
+  --field body="💬 **[Human Override — ARGUE]** <your explanation here>"
+```
+
+Replace `<COMMENT_ID>` with the ID from the fetch above.
+
+## How to force-accept a comment the agent argued away
+
+If the agent argued but you agree with the reviewer, post a reply and then fix manually:
+
+```bash
+gh api repos/ykita0224-work/hive-strategy/pulls/comments/<COMMENT_ID>/replies \
+  --method POST \
+  --field body="✅ **[Human Override — ACCEPT]** Fixing this — the reviewer is correct."
+```
+
+Then fix the code, commit, and push. The CI loop will re-review.
+
+## How to dismiss all remaining comments and close the loop
+
+If you are satisfied that remaining issues are false positives or intentional:
+
+```bash
+PR=$(gh pr view --json number --jq .number)
+gh pr review $PR --comment --body "All remaining review comments have been addressed or intentionally dismissed. Ready for merge."
+```
+
+## Cursor — what to do when the user says "argue against this"
+
+1. Fetch the PR comments to find the specific comment ID
+2. Read the file at the referenced path and line to understand the code
+3. Draft a clear technical argument for why the code is correct
+4. Post the reply via the `gh api` command above
+5. Report back what you argued and why
+
+## Cursor — what to do when the user says "accept and fix this"
+
+1. Fetch the comment body to understand the issue
+2. Read the full file at the referenced path
+3. Apply the fix directly in Cursor
+4. Post an acceptance reply via the `gh api` command above
+5. Commit and push — the CI loop will verify
+
+## Debate etiquette
+
+- Be specific in arguments — vague "this is intentional" replies are not useful
+- If arguing, explain the invariant, contract, or trade-off that makes the code correct
+- If accepting, say what you are fixing and why the reviewer was right
+- The goal is a correct codebase, not winning the argument
