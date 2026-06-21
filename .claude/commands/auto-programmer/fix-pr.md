@@ -4,12 +4,33 @@ You are the programmer who authored this PR. Read every open review comment and 
 
 ## Step 1 — Gather context
 
+Resolve the target PR using this priority order:
+
+1. **Conversation context** — if a `/task` command ran earlier in this conversation and printed a PR URL, extract the PR number from it directly. This is the most reliable source and requires no shell commands.
+
+2. **Current branch** — if no PR is in context, check if the checked-out branch has an open PR:
+   ```bash
+   PR=$(gh pr view --json number --jq .number 2>/dev/null)
+   ```
+
+3. **Worktrees** — if step 2 returns nothing (e.g. we're on `develop` or `main`), scan all worktrees for branches with open PRs and pick the most recently updated one:
+   ```bash
+   git worktree list --porcelain \
+     | awk '/^branch / {print $2}' \
+     | sed 's|refs/heads/||' \
+     | while read branch; do
+         gh pr view "$branch" --json number,updatedAt --jq '[.number, .updatedAt] | @tsv' 2>/dev/null
+       done \
+     | sort -k2 -r \
+     | head -1 \
+     | cut -f1
+   ```
+
+4. If no PR is found via any method, tell me and stop.
+
 ```bash
-PR=$(gh pr view --json number --jq .number)
 REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 ```
-
-Stop immediately if there is no open PR on this branch.
 
 Fetch **all** review comments (open and resolved), preserving thread structure:
 
@@ -75,8 +96,8 @@ Only after I say yes (or give modified instructions):
 1. Apply all FIX code changes
 2. Post all replies:
    ```bash
-   gh api repos/$REPO/pulls/comments/<ID>/replies \
-     --method POST --field body="<reply>"
+   gh api repos/$REPO/pulls/$PR/comments/<ID>/replies \
+     --method POST -f body="<reply>"
    ```
 3. Commit only the changed files:
    ```bash
