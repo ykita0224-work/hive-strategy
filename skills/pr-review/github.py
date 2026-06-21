@@ -29,8 +29,23 @@ def _headers(token: str) -> dict:
 
 def get_pr_files(repo: str, pr_number: int, token: str) -> list[PRFile]:
     url = f"{GITHUB_API}/repos/{repo}/pulls/{pr_number}/files"
-    resp = httpx.get(url, headers=_headers(token))
-    resp.raise_for_status()
+    results = []
+    page = 1
+    while True:
+        resp = httpx.get(
+            url,
+            headers=_headers(token),
+            params={"per_page": 100, "page": page},
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            break
+        results.extend(data)
+        if len(data) < 100:
+            break
+        page += 1
     return [
         PRFile(
             filename=f["filename"],
@@ -38,13 +53,13 @@ def get_pr_files(repo: str, pr_number: int, token: str) -> list[PRFile]:
             additions=f["additions"],
             deletions=f["deletions"],
         )
-        for f in resp.json()
+        for f in results
     ]
 
 
 def get_pr_commit_sha(repo: str, pr_number: int, token: str) -> str:
     url = f"{GITHUB_API}/repos/{repo}/pulls/{pr_number}"
-    resp = httpx.get(url, headers=_headers(token))
+    resp = httpx.get(url, headers=_headers(token), timeout=30.0)
     resp.raise_for_status()
     return resp.json()["head"]["sha"]
 
@@ -107,6 +122,6 @@ def post_review(
         "event": "COMMENT",
         "comments": inline,
     }
-    resp = httpx.post(url, headers=_headers(token), json=body)
+    resp = httpx.post(url, headers=_headers(token), json=body, timeout=30.0)
     resp.raise_for_status()
     print(f"Posted review: {len(inline)} inline comment(s)")

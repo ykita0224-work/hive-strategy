@@ -61,9 +61,15 @@ MAX_DIFF_CHARS = 80_000
 
 def _build_diff(files: list[PRFile]) -> str:
     parts = []
+    total = 0
     for f in files:
         if f.patch:
-            parts.append(f"### {f.filename}\n```diff\n{f.patch}\n```")
+            chunk = f"### {f.filename}\n```diff\n{f.patch}\n```"
+            if total + len(chunk) > MAX_DIFF_CHARS:
+                parts.append("_[Remaining files omitted — diff too large]_")
+                break
+            parts.append(chunk)
+            total += len(chunk)
     return "\n\n".join(parts)
 
 
@@ -74,9 +80,6 @@ def review_diff(
 
     if not diff.strip():
         return "No reviewable changes (binary files or empty diff).", []
-
-    if len(diff) > MAX_DIFF_CHARS:
-        diff = diff[:MAX_DIFF_CHARS] + "\n\n_[Diff truncated — too large to review in full]_"
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
@@ -92,8 +95,13 @@ def review_diff(
         ],
     )
 
-    tool_use = next(b for b in message.content if b.type == "tool_use")
-    result = tool_use.input
+    tool_use_blocks = [b for b in message.content if b.type == "tool_use"]
+    if not tool_use_blocks:
+        raise RuntimeError(
+            f"Model did not return a tool_use block (stop_reason={message.stop_reason!r}). "
+            "The diff may be too large even after truncation."
+        )
+    result = tool_use_blocks[0].input
 
     severity_emoji = {
         "bug": "🐛",
