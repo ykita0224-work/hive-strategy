@@ -1,0 +1,143 @@
+---
+description: Guides Cursor through the interactive debate flow after CI posts PR review comments. Propose arguments/questions/fixes, show the full plan, wait for human approval, then execute.
+globs:
+alwaysApply: false
+---
+
+# PR Debate Flow (Human-in-the-Loop)
+
+## The Full Workflow
+
+```
+1. You ask Claude to implement something
+2. Claude makes changes, shows them to you
+3. Claude asks: "Shall I create a PR?" → you review locally first
+4. PR is created → CI runs reviewer → posts inline comments on GitHub
+5. You open Cursor → run /debate → Claude proposes a response plan
+6. You review the plan and approve, modify, or reject each item
+7. On approval → Claude posts replies + applies fixes + pushes
+8. CI runs reviewer again on the new push → back to step 5
+9. Repeat until you merge
+```
+
+## Step 5: How to Start the Debate
+
+When the user asks to debate/respond to review comments, follow these steps IN ORDER. Do not skip to execution.
+
+### Phase A — Fetch live comment state
+
+```bash
+PR=$(gh pr view --json number --jq .number)
+REPO=ykita0224-work/hive-strategy
+
+# All reviewer comments (top-level, not replies)
+gh api repos/$REPO/pulls/$PR/comments \
+  --jq '[.[] | select(.in_reply_to_id == null) | {id: .id, path: .path, line: .line, severity: (.body | split("**")[1] // ""), body: .body}]'
+
+# Existing replies (already debated comments)
+gh api repos/$REPO/pulls/$PR/comments \
+  --jq '[.[] | select(.in_reply_to_id != null) | {reply_to: .in_reply_to_id, body: .body[:80]}]'
+```
+
+Only process comments that have NOT already been replied to.
+
+### Phase B — Read the actual code
+
+For each comment, read the full file at the referenced path before forming an opinion:
+```bash
+cat <path>
+```
+Do NOT rely on the diff alone — read the full file context.
+
+### Phase C — Draft the response plan
+
+For each open comment, decide ONE of three responses:
+
+| Response | When to use | What you'll do |
+|---|---|---|
+| **ARGUE** | The code is intentionally written this way; reviewer misunderstood | Post a technical explanation as a reply |
+| **ASK** | The reviewer's intent is unclear; need clarification before fixing | Post a question as a reply |
+| **ACCEPT + FIX** | Reviewer is correct; the issue is real and fixable | Fix the code + post an acknowledgement reply |
+
+### Phase D — Present the plan to the user (REQUIRED before executing anything)
+
+Show the user a clear summary like this:
+
+```
+Here is my proposed response plan for PR #<N>:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[1] github.py:30 — 🐛 BUG (pagination)
+    Decision: ACCEPT + FIX
+    Reply:    "✅ Accepted — adding pagination loop, GitHub returns max 30 files by default."
+    Fix:      Add while loop with per_page=100 in get_pr_files()
+
+[2] reviewer.py:87 — ⚡ PERFORMANCE (truncation)
+    Decision: ARGUE
+    Reply:    "💬 The truncation at string level is intentional here because..."
+
+[3] reviewer.py:100 — ⚠️ ERROR-HANDLING (StopIteration)
+    Decision: ASK
+    Reply:    "❓ Are you expecting this to fail under normal tool_choice=forced usage,
+              or only at max-tokens exhaustion? Clarifying before fixing."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Shall I proceed with this plan? You can:
+- Say "yes" to execute all
+- Say "skip [N]" to drop an item
+- Say "change [N] to ARGUE/ASK/ACCEPT" to override a decision
+- Say "no" to cancel
+```
+
+**Do not execute until the user explicitly approves.**
+
+### Phase E — Execute on approval
+
+Only after the user says yes (or a modified version):
+
+1. Post replies to GitHub for each item:
+```bash
+gh api repos/ykita0224-work/hive-strategy/pulls/comments/<ID>/replies \
+  --method POST \
+  --field body="<reply text>"
+```
+
+2. Apply code fixes for ACCEPT items (edit the files directly in Cursor)
+
+3. Stage and commit:
+```bash
+git add <changed files>
+git commit -m "fix: address review comments — <brief summary>
+
+Co-Authored-By: Claude"
+```
+
+4. Push:
+```bash
+git push
+```
+
+5. Report what was done and that CI will re-review.
+
+## Human Override Commands
+
+At any point during or after the debate:
+
+```bash
+# Override: argue against a specific comment
+gh api repos/ykita0224-work/hive-strategy/pulls/comments/<ID>/replies \
+  --method POST \
+  --field body="💬 **[Override — ARGUE]** <your reason>"
+
+# Override: accept a comment the agent argued away
+gh api repos/ykita0224-work/hive-strategy/pulls/comments/<ID>/replies \
+  --method POST \
+  --field body="✅ **[Override — ACCEPT]** Fixing this — reviewer is correct."
+```
+
+## What NOT to do
+
+- Do not post replies or push code until the user has approved the plan
+- Do not argue just to avoid work — only argue when the code is genuinely correct
+- Do not fix things the reviewer was wrong about — post an argument instead
+- Do not make unrelated changes while fixing — one concern at a time

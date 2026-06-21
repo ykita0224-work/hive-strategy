@@ -23,16 +23,16 @@ Under the hood, the project is a showcase of modern DevOps: GitHub MCP wired to 
   ```
   hive-strategy/
   ├── apps/
-  │   ├── web/          # Next.js frontend
-  │   └── api/          # Node backend (Hono)
+  │   ├── web/               # Next.js frontend (own pnpm + package.json)
+  │   └── api/               # FastAPI Python backend (own uv + pyproject.toml)
   ├── packages/
-  │   └── agents/       # Shared agent runtime logic
+  │   └── agents/            # Shared agent runtime (Python)
   ├── .github/
-  │   └── workflows/    # CI pipelines
+  │   └── workflows/         # CI pipelines
   ├── .claude/
-  │   └── settings.json # Claude Code MCP config
-  ├── mcp/              # MCP server definitions
-  ├── skills/           # Agent skill modules
+  │   └── settings.json      # Claude Code MCP config
+  ├── mcp/                   # MCP server definitions
+  ├── skills/                # Agent skill modules (Python)
   └── PLAN.md
   ```
 - [ ] `pnpm` workspace
@@ -81,42 +81,29 @@ Under the hood, the project is a showcase of modern DevOps: GitHub MCP wired to 
 
 **Goal:** Every PR gets an automated Claude code review posted as inline GitHub comments.
 
-### 2.1 The Review Skill
-- [ ] Create `skills/pr-review/` skill module:
-  - `index.ts` — entry point, accepts PR number + repo
-  - `reviewer.ts` — calls Claude with the diff and codebase context
-  - `github.ts` — posts inline comments via GitHub API
-- [ ] Review dimensions:
-  - Correctness bugs
-  - Security issues (OWASP top 10)
-  - Performance concerns
-  - Test coverage gaps
-  - Architecture consistency
+### 2.1 Human-in-the-Loop Flow
 
-### 2.2 CI Integration
-- [ ] `pr-review.yml` workflow:
-  ```yaml
-  on:
-    pull_request:
-      types: [opened, synchronize]
-  jobs:
-    ai-review:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - run: pnpm install
-        - run: pnpm skill:pr-review
-          env:
-            ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            PR_NUMBER: ${{ github.event.pull_request.number }}
-  ```
-- [ ] Rate limit handling (large PRs → chunk the diff)
-- [ ] Skip label: `skip-ai-review` on PR to bypass
+```
+You ask Claude → Claude implements → Claude asks "create PR?" → You review locally
+→ PR created → CI reviewer posts inline comments
+→ You open Cursor → /debate → Claude proposes plan (ARGUE / ASK / ACCEPT+FIX)
+→ You approve → Claude posts replies + fixes + pushes
+→ CI re-reviews → loop until you merge
+```
 
-### 2.3 Claude Code Skill (`.claude/`)
-- [ ] Register as a slash command: `/review` → runs the PR review skill locally
-- [ ] Can be run manually before pushing: `claude /review`
+### 2.2 CI: Review Only (`skills/pr-review/`)
+- [x] `main.py` — fetches diff, calls reviewer, posts inline comments. CI only.
+- [x] `reviewer.py` — Claude Sonnet with structured tool output, reviews for bugs/security/perf
+- [x] `github.py` — GitHub API client (paginated file fetch, inline comment posting)
+- [x] Rate limit: truncates at file boundary (not mid-hunk)
+- [x] Skip label: `skip-ai-review` on PR to bypass CI review
+
+### 2.3 Interactive: Debate in Cursor / Claude Code
+- [x] `debater.py` — utility module: fetches comments, runs programmer agent (ARGUE/ASK/ACCEPT)
+- [x] `fixer.py` — utility module: Claude agent with read/write file tools to apply fixes
+- [x] `.claude/commands/debate.md` — `/debate` slash command: propose plan → wait for approval → execute
+- [x] `.cursor/rules/debate.mdc` — Cursor rule: same flow, guided by Cursor AI in the sidebar
+- [x] `.cursor/rules/pr-review.mdc` — Cursor rule: always-on PR context loader
 
 ---
 
@@ -220,7 +207,7 @@ AgentOrchestrator
 | Layer | Choice | Reason |
 |---|---|---|
 | Frontend | Next.js 15 + Tailwind | SSE support, App Router streaming |
-| Backend | Node.js (Hono) | Lightweight, fast SSE, same language as frontend |
+| Backend | FastAPI (Python 3) | Richer AI/ML ecosystem, async SSE support |
 | AI | Claude Sonnet 4.6 | Best tool-use, streaming |
 | Agent SDK | Anthropic SDK + custom runtime | Full control over streaming events |
 | MCP | `@modelcontextprotocol/server-github` | Phase 1 |

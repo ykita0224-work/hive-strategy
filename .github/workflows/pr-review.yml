@@ -1,0 +1,40 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main, develop]
+
+# Review only — no auto-fix, no auto-push.
+# Debate and fixes happen interactively via the /fix Claude Code CLI command.
+jobs:
+  ai-review:
+    name: Claude Code Review
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'skip-ai-review') }}
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install skill dependencies
+        run: uv pip install -r skills/pr-review/requirements.txt --system
+
+      - name: Post review comments
+        run: python skills/pr-review/main.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}

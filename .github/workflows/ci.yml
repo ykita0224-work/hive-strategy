@@ -1,0 +1,34 @@
+name: CI — Skills
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'skills/**'
+  push:
+    branches: [develop]
+    paths:
+      - 'skills/**'
+
+jobs:
+  skills:
+    name: Syntax & Import Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv pip install -r skills/pr-review/requirements.txt --system
+
+      - name: Syntax check
+        run: python -m py_compile skills/pr-review/main.py skills/pr-review/github.py skills/pr-review/reviewer.py skills/pr-review/debater.py skills/pr-review/fixer.py
+
+# ci-web.yml will be added in Phase 5 (apps/web) with paths: ['apps/web/**']
+# ci-api.yml will be added in Phase 4 (apps/api) with paths: ['apps/api/**']
