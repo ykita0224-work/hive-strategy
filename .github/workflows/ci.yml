@@ -7,35 +7,9 @@ on:
     branches: [develop]
 
 jobs:
-  web:
-    name: Web — Lint & Type Check
+  skills:
+    name: Skills — Syntax & Import Check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: apps/web/pnpm-lock.yaml
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-
-  api:
-    name: API — Lint & Type Check
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
 
@@ -46,10 +20,11 @@ jobs:
       - name: Install uv
         run: pip install uv
 
-      - run: uv sync
+      - name: Install dependencies
+        run: uv pip install -r skills/pr-review/requirements.txt --system
 
-      - name: Lint
-        run: uv run ruff check .
+      - name: Syntax check
+        run: python -m py_compile skills/pr-review/main.py skills/pr-review/github.py skills/pr-review/reviewer.py skills/pr-review/debater.py skills/pr-review/fixer.py
 
-      - name: Type check
-        run: uv run mypy .
+  # web job will be added when apps/web is scaffolded (Phase 5)
+  # api job will be added when apps/api is scaffolded (Phase 4)
