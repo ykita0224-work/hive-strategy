@@ -35,6 +35,10 @@ jobs:
             exit 1
           fi
           SLACK_TS=$(echo "$RESPONSE" | jq -r '.ts')
+          if [ -z "$SLACK_TS" ] || [ "$SLACK_TS" = "null" ]; then
+            echo "::error::Slack response missing ts field"
+            exit 1
+          fi
 
           gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
             --method POST \
