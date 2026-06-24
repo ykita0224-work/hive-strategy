@@ -4,25 +4,56 @@ You are the programmer who authored this PR. Read every open review comment and 
 
 ## Step 1 — Gather context
 
+Resolve the target PR using this priority order:
+
+1. **Conversation context** — if a `/task` command ran earlier in this conversation and printed a PR URL, extract the PR number from it directly. This is the most reliable source and requires no shell commands.
+
+2. **Current branch** — if no PR is in context, check if the checked-out branch has an open PR:
+   ```bash
+   PR=$(gh pr view --json number --jq .number 2>/dev/null)
+   ```
+
+3. **Worktrees** — if step 2 returns nothing (e.g. we're on `develop` or `main`), scan all worktrees for branches with open PRs and pick the most recently updated one:
+   ```bash
+   git worktree list --porcelain \
+     | awk '/^branch / {print $2}' \
+     | sed 's|refs/heads/||' \
+     | while read branch; do
+         gh pr view "$branch" --json number,updatedAt --jq '[.number, .updatedAt] | @tsv' 2>/dev/null
+       done \
+     | sort -k2 -r \
+     | head -1 \
+     | cut -f1
+   ```
+
+4. If no PR is found via any method, tell me and stop.
+
 ```bash
-PR=$(gh pr view --json number --jq .number)
 REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 ```
 
-Stop immediately if there is no open PR on this branch.
-
-Fetch open top-level comments (not yet replied to):
+Fetch **all** review comments (open and resolved), preserving thread structure:
 
 ```bash
 gh api repos/$REPO/pulls/$PR/comments \
-  --jq '[.[] | select(.in_reply_to_id == null) | {id: .id, path: .path, line: .line, body: .body}]'
+  --jq '[.[] | {id: .id, path: .path, line: .line, body: .body, in_reply_to_id: .in_reply_to_id, created_at: .created_at, user: .user.login}]'
 ```
 
-If there are no open comments, tell me and stop.
+If there are no open top-level comments (`in_reply_to_id == null`), tell me and stop.
+
+## Step 1b — Detect circular reviews
+
+Group all comments by thread (root comment + its replies, linked via `in_reply_to_id`). For each thread on the same `path` + `line`:
+
+1. Read the thread chronologically.
+2. Extract what each round suggested: e.g. round 1 → "use A", round 2 (after fix) → "use B", round 3 → "use A again".
+3. A thread is **circular** if any suggestion in the current open comment is semantically equivalent to a suggestion that was already applied and later reversed by the same reviewer.
+
+Mark circular threads with decision `ARGUE_CIRCULAR` (see Step 3).
 
 ## Step 2 — Read the code
 
-For each comment, read the full file it references. Do not judge from the diff alone.
+For each open comment, read the full file it references. Do not judge from the diff alone.
 
 ## Step 3 — Decide for each comment
 
@@ -32,6 +63,12 @@ Pick exactly one response per comment:
 |---|---|---|
 | **FIX** | Reviewer is correct — real bug, real issue | Apply the code fix, post an acknowledgement reply |
 | **ARGUE** | Reviewer is wrong or the comment is out of scope / incorrect | Post a clear technical reply explaining why; no code change |
+| **ARGUE_CIRCULAR** | The reviewer is asking to revert a change they previously requested — oscillating between two positions | Post a reply quoting the contradiction and asking the reviewer to decide definitively; no code change |
+
+For `ARGUE_CIRCULAR`, the reply must:
+- Quote the earlier contradicting suggestion (with approximate date/round).
+- State what was implemented based on that suggestion.
+- Ask the reviewer to pick one direction and resolve the other thread.
 
 ## Step 4 — Show me the plan (do NOT act yet)
 
@@ -59,8 +96,8 @@ Only after I say yes (or give modified instructions):
 1. Apply all FIX code changes
 2. Post all replies:
    ```bash
-   gh api repos/$REPO/pulls/comments/<ID>/replies \
-     --method POST --field body="<reply>"
+   gh api repos/$REPO/pulls/$PR/comments/<ID>/replies \
+     --method POST -f body="<reply>"
    ```
 3. Commit only the changed files:
    ```bash

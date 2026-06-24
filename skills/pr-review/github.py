@@ -58,6 +58,32 @@ def get_pr_files(repo: str, pr_number: int, token: str) -> list[PRFile]:
     ]
 
 
+def get_existing_review_comments(repo: str, pr_number: int, token: str) -> list[dict]:
+    """Return all inline review comments already posted on this PR."""
+    url = f"{GITHUB_API}/repos/{repo}/pulls/{pr_number}/comments"
+    results = []
+    page = 1
+    while True:
+        resp = httpx.get(
+            url,
+            headers=_headers(token),
+            params={"per_page": 100, "page": page},
+            timeout=30.0,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            break
+        results.extend(data)
+        if len(data) < 100:
+            break
+        page += 1
+    return [
+        {"path": c["path"], "line": c.get("line"), "body": c["body"]}
+        for c in results
+    ]
+
+
 def get_pr_commit_sha(repo: str, pr_number: int, token: str) -> str:
     url = f"{GITHUB_API}/repos/{repo}/pulls/{pr_number}"
     resp = httpx.get(url, headers=_headers(token), timeout=30.0)
