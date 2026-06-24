@@ -2,32 +2,110 @@ name: Slack — PR Notification
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, closed]
     branches: [main, develop]
 
 jobs:
-  notify:
-    name: Notify Slack
+  notify-opened:
+    name: Notify Slack — Opened
+    if: github.event.action == 'opened'
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
-      - name: Post PR opened message
+      - name: Post to Slack and store thread ts
         run: |
-          curl -sSf -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-Type: application/json' \
+          RESPONSE=$(curl -sSf -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json; charset=utf-8" \
             -d "$(jq -n \
+              --arg channel "$SLACK_CHANNEL_ID" \
               --arg url "$PR_URL" \
               --arg num "$PR_NUMBER" \
               --arg title "$PR_TITLE" \
               --arg author "$PR_AUTHOR" \
               --arg base "$BASE_REF" \
               --arg head "$HEAD_REF" \
-              '{text: ("*New PR opened* — <" + $url + "|#" + $num + ": " + $title + ">"), blocks: [{type:"section",text:{type:"mrkdwn",text:(":github: *New PR opened*\n<" + $url + "|#" + $num + ": " + $title + ">\n*Author:* " + $author + "\n*Base:* `" + $base + "` ← `" + $head + "`")}}]}'
-            )"
+              '{channel: $channel, text: ("*New PR opened* — <" + $url + "|#" + $num + ": " + $title + ">"), blocks: [{type:"section",text:{type:"mrkdwn",text:(":github: *New PR opened*\n<" + $url + "|#" + $num + ": " + $title + ">\n*Author:* " + $author + "\n*Base:* `" + $base + "` ← `" + $head + "`")}}]}'
+            )") || { echo "::error::curl failed with exit code $?"; exit 1; }
+
+          echo "Slack response: $RESPONSE"
+          if [ "$(echo "$RESPONSE" | jq -r '.ok')" != "true" ]; then
+            echo "::error::Slack API error: $(echo "$RESPONSE" | jq -r '.error')"
+            exit 1
+          fi
+          SLACK_TS=$(echo "$RESPONSE" | jq -r '.ts')
+          if [ -z "$SLACK_TS" ] || [ "$SLACK_TS" = "null" ]; then
+            echo "::error::Slack response missing ts field"
+            exit 1
+          fi
+
+          gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" \
+            --method POST \
+            -f body="<!-- slack-thread-ts: $SLACK_TS -->"
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
           PR_URL: ${{ github.event.pull_request.html_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           BASE_REF: ${{ github.base_ref }}
           HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+
+  notify-merged:
+    name: Notify Slack — Merged
+    if: github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - name: Post merged reply to Slack thread
+        run: |
+          SLACK_TS=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
+            --jq '[.[] | select(.body | startswith("<!-- slack-thread-ts:"))] | first | .body | ltrimstr("<!-- slack-thread-ts: ") | rtrimstr(" -->")')
+
+          if [ -z "$SLACK_TS" ] || [ "$SLACK_TS" = "null" ]; then
+            echo "::warning::No slack-thread-ts comment found for PR #$PR_NUMBER — posting as top-level message"
+          elif ! echo "$SLACK_TS" | grep -qE '^[0-9]+\.[0-9]+$'; then
+            echo "::warning::Extracted SLACK_TS '$SLACK_TS' does not look like a valid Slack timestamp — discarding"
+            SLACK_TS=""
+          fi
+
+          PAYLOAD=$(jq -n \
+            --arg channel "$SLACK_CHANNEL_ID" \
+            --arg ts "$SLACK_TS" \
+            --arg url "$PR_URL" \
+            --arg num "$PR_NUMBER" \
+            --arg title "$PR_TITLE" \
+            --arg author "$PR_AUTHOR" \
+            --arg base "$BASE_REF" \
+            --arg merger "$MERGED_BY" \
+            'if ($ts == "" or $ts == "null")
+             then {channel: $channel}
+             else {channel: $channel, thread_ts: $ts}
+             end
+             + {text: ("*PR merged* — <" + $url + "|#" + $num + ": " + $title + ">"),
+                blocks: [{type:"section",text:{type:"mrkdwn",text:(":merged: *PR merged*\n<" + $url + "|#" + $num + ": " + $title + ">\n*Author:* " + $author + "   *Merged by:* " + $merger + "\n*Into:* `" + $base + "`")}}]}')
+
+          RESPONSE=$(curl -sSf -X POST "https://slack.com/api/chat.postMessage" \
+            -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+            -H "Content-Type: application/json; charset=utf-8" \
+            -d "$PAYLOAD") || { echo "::error::curl failed with exit code $?"; exit 1; }
+
+          echo "Slack response: $RESPONSE"
+          if [ "$(echo "$RESPONSE" | jq -r '.ok')" != "true" ]; then
+            echo "::error::Slack API error: $(echo "$RESPONSE" | jq -r '.error')"
+            exit 1
+          fi
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          BASE_REF: ${{ github.base_ref }}
+          MERGED_BY: ${{ github.event.pull_request.merged_by.login || 'unknown' }}
+          GH_TOKEN: ${{ github.token }}
