@@ -79,7 +79,7 @@ def _upsert_cost_comment(
     body = (
         f"{COST_MARKER} {json.dumps(data)} -->\n"
         f"**Model:** {MODEL}\n"
-        f"**Token Usage:** {input_tokens:,} / {output_tokens:,}\n"
+        f"**Token Usage:** Input: {input_tokens:,} / Output: {output_tokens:,}\n"
         f"**Cost:** ${total_usd:.4f} / ¥{total_jpy:.1f}"
     )
 
