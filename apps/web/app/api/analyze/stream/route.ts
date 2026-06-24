@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     return new Response("Missing idea", { status: 400 });
   }
 
+  const { signal } = request;
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
@@ -17,15 +18,27 @@ export async function GET(request: Request) {
       const send = (data: object) =>
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
 
-      send({ type: "start", agentIds: AGENTS.map((a) => a.id) });
+      try {
+        send({ type: "start", agentIds: AGENTS.map((a) => a.id) });
 
-      for (const agent of AGENTS) {
-        await new Promise((r) => setTimeout(r, 1500));
-        send({ type: "agent", id: agent.id, text: agent.mock });
+        for (const agent of AGENTS) {
+          if (signal.aborted) break;
+          await new Promise<void>((resolve) => {
+            const t = setTimeout(resolve, 1500);
+            signal.addEventListener("abort", () => { clearTimeout(t); resolve(); }, { once: true });
+          });
+          if (signal.aborted) break;
+          send({ type: "agent", id: agent.id, text: agent.mock });
+        }
+
+        if (!signal.aborted) {
+          send({ type: "done" });
+        }
+      } catch {
+        // client disconnected or enqueue error — fall through to close
+      } finally {
+        controller.close();
       }
-
-      send({ type: "done" });
-      controller.close();
     },
   });
 

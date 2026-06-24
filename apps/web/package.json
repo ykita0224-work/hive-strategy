@@ -15,7 +15,8 @@
   },
   "pnpm": {
     "ignoredBuiltDependencies": [
-      "sharp"
+      "sharp",
+      "unrs-resolver"
     ]
   },
   "devDependencies": {

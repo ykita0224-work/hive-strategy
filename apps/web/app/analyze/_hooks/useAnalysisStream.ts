@@ -14,15 +14,19 @@ export function useAnalysisStream(idea: string) {
   const [statuses, setStatuses] = useState<Record<string, Status>>(initialStatuses);
   const [texts, setTexts] = useState<Record<string, string>>(initialTexts);
   const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
+  const runningRef = useRef(false);
 
   useEffect(() => () => { esRef.current?.close(); }, []);
 
   const run = useCallback(() => {
-    if (running) return;
+    if (runningRef.current) return;
+    runningRef.current = true;
 
     esRef.current?.close();
     setRunning(true);
+    setError(null);
     setStatuses(initialStatuses());
     setTexts(initialTexts());
 
@@ -32,12 +36,12 @@ export function useAnalysisStream(idea: string) {
     esRef.current = es;
 
     es.onmessage = (e) => {
-      const data = JSON.parse(e.data as string) as {
-        type: string;
-        agentIds?: string[];
-        id?: string;
-        text?: string;
-      };
+      let data: { type: string; agentIds?: string[]; id?: string; text?: string };
+      try {
+        data = JSON.parse(e.data as string);
+      } catch {
+        return;
+      }
 
       if (data.type === "start") {
         setStatuses(
@@ -47,18 +51,21 @@ export function useAnalysisStream(idea: string) {
         setStatuses((prev) => ({ ...prev, [data.id!]: "done" }));
         setTexts((prev) => ({ ...prev, [data.id!]: data.text ?? "" }));
       } else if (data.type === "done") {
+        runningRef.current = false;
         setRunning(false);
         es.close();
       }
     };
 
     es.onerror = () => {
+      runningRef.current = false;
       setRunning(false);
+      setError("Analysis failed — please try again.");
       es.close();
     };
-  }, [running, idea]);
+  }, [idea]);
 
   const allDone = AGENTS.every((a) => statuses[a.id] === "done");
 
-  return { statuses, texts, running, allDone, run };
+  return { statuses, texts, running, allDone, error, run };
 }

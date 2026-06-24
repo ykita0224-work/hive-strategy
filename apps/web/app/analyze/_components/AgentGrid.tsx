@@ -9,21 +9,24 @@ interface Props {
 }
 
 export function AgentGrid({ idea }: Props) {
-  const { statuses, texts, running, allDone, run } = useAnalysisStream(idea);
+  const { statuses, texts, running, allDone, error, run } = useAnalysisStream(idea);
 
   return (
     <div className="flex flex-col gap-8">
-      <button
-        onClick={run}
-        disabled={running}
-        className="self-start bg-white text-black font-semibold px-6 py-2.5 rounded-xl text-sm hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-      >
-        {running ? "Running…" : allDone ? "Re-run Analysis" : "Run Analysis"}
-      </button>
+      <div className="flex flex-col gap-2">
+        <button
+          onClick={run}
+          disabled={running}
+          className="self-start bg-white text-black font-semibold px-6 py-2.5 rounded-xl text-sm hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+        >
+          {running ? "Running…" : allDone ? "Re-run Analysis" : "Run Analysis"}
+        </button>
+        {error && <p className="text-red-400 text-sm">{error}</p>}
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {AGENTS.map((agent) => {
-          const status = statuses[agent.id];
+          const status = statuses[agent.id] ?? "waiting";
           const text = texts[agent.id];
           return (
             <div
