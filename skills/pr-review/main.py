@@ -42,9 +42,20 @@ def _gh_headers(token: str) -> dict:
 
 def _get_issue_comments(repo: str, pr_number: int, token: str) -> list[dict]:
     url = f"https://api.github.com/repos/{repo}/issues/{pr_number}/comments"
-    resp = httpx.get(url, headers=_gh_headers(token), timeout=30.0)
-    resp.raise_for_status()
-    return resp.json()
+    all_comments: list[dict] = []
+    page = 1
+    while True:
+        resp = httpx.get(url, headers=_gh_headers(token),
+                         params={"per_page": 100, "page": page}, timeout=30.0)
+        resp.raise_for_status()
+        batch = resp.json()
+        if not batch:
+            break
+        all_comments.extend(batch)
+        if any(COST_MARKER in c.get("body", "") for c in batch):
+            break
+        page += 1
+    return all_comments
 
 
 def _upsert_cost_comment(
