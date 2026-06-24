@@ -1,4 +1,5 @@
 import anthropic
+from anthropic.types import Usage
 from github import PRFile, ReviewComment
 
 SYSTEM_PROMPT = """You are a senior software engineer performing a thorough code review.
@@ -92,11 +93,11 @@ def review_diff(
     files: list[PRFile],
     client: anthropic.Anthropic,
     existing_comments: list[dict] | None = None,
-) -> tuple[str, list[ReviewComment]]:
+) -> tuple[str, list[ReviewComment], Usage | None]:
     diff = _build_diff(files)
 
     if not diff.strip():
-        return "No reviewable changes (binary files or empty diff).", []
+        return "No reviewable changes (binary files or empty diff).", [], None
 
     existing_block = _build_existing_comments_block(existing_comments or [])
     user_content = f"Please review this pull request diff:\n\n{diff}"
@@ -141,4 +142,4 @@ def review_diff(
         for c in result.get("comments", [])
     ]
 
-    return result["summary"], comments
+    return result["summary"], comments, message.usage

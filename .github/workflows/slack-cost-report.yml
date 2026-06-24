@@ -1,0 +1,75 @@
+name: Slack — PR Cost Report
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main, develop]
+
+jobs:
+  cost-report:
+    name: Post cost to Slack
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+    steps:
+      - name: Read cost comment and post to Slack
+        run: |
+          COMMENTS=$(curl -sSf \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments")
+
+          COST_JSON=$(echo "$COMMENTS" | jq -r '
+            .[] | .body | select(contains("<!-- pr-cost-data:")) |
+            capture("<!-- pr-cost-data: (?P<json>\\{[^}]+\\}) -->") | .json
+          ' | tail -1)
+
+          if [ -z "$COST_JSON" ]; then
+            echo "No cost data found — skipping Slack notification"
+            exit 0
+          fi
+
+          INPUT=$(echo "$COST_JSON" | jq '.input_tokens')
+          OUTPUT=$(echo "$COST_JSON" | jq '.output_tokens')
+          RUNS=$(echo "$COST_JSON" | jq '.runs')
+          TOTAL_USD=$(echo "$COST_JSON" | jq '.total_usd')
+          TOTAL_JPY=$(echo "$TOTAL_USD * 155" | bc -l | xargs printf "%.1f")
+          TOTAL_USD_FMT=$(printf "%.4f" "$TOTAL_USD")
+
+          curl -sSf -X POST "$SLACK_COST_WEBHOOK_URL" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n \
+              --arg pr_url "$PR_URL" \
+              --arg pr_num "$PR_NUMBER" \
+              --arg pr_title "$PR_TITLE" \
+              --arg author "$PR_AUTHOR" \
+              --argjson input "$INPUT" \
+              --argjson output "$OUTPUT" \
+              --argjson runs "$RUNS" \
+              --arg usd "$TOTAL_USD_FMT" \
+              --arg jpy "$TOTAL_JPY" \
+              '{
+                blocks: [
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: (
+                        ":moneybag: *PR #" + $pr_num + " merged* — <" + $pr_url + "|" + $pr_title + ">\n"
+                        + "*Author:* " + $author + "\n"
+                        + "*Review runs:* " + ($runs | tostring) + "\n"
+                        + "*Tokens:* " + ($input | tostring) + " in / " + ($output | tostring) + " out\n"
+                        + "*Cost:* $" + $usd + " / ¥" + $jpy
+                      )
+                    }
+                  }
+                ]
+              }'
+            )"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLACK_COST_WEBHOOK_URL: ${{ secrets.SLACK_COST_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
