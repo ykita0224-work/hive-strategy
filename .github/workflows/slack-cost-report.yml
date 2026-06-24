@@ -32,6 +32,12 @@ jobs:
           OUTPUT=$(echo "$COST_JSON" | jq '.output_tokens')
           RUNS=$(echo "$COST_JSON" | jq '.runs')
           TOTAL_USD=$(echo "$COST_JSON" | jq '.total_usd')
+
+          if [ "$TOTAL_USD" = "null" ] || [ -z "$TOTAL_USD" ] || ! [[ "$TOTAL_USD" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "Malformed cost JSON (total_usd=$TOTAL_USD) — skipping Slack notification"
+            exit 0
+          fi
+
           TOTAL_JPY=$(echo "$TOTAL_USD * 155" | bc -l | xargs printf "%.1f")
           TOTAL_USD_FMT=$(printf "%.4f" "$TOTAL_USD")
 

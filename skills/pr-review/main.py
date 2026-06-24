@@ -128,6 +128,8 @@ def main() -> None:
                                  usage.input_tokens, usage.output_tokens)
         except Exception as e:
             print(f"[cost] Warning: could not post cost comment: {e}", file=sys.stderr)
+            if hasattr(e, "response"):
+                print(f"[cost] Response body: {e.response.text}", file=sys.stderr)
 
     if not comments:
         post_review(repo, pr_number, commit_sha, [], github_token, f"✅ {summary}", files)
