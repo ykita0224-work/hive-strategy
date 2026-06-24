@@ -38,13 +38,6 @@ jobs:
     if: github.event.action == 'closed' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
-      - name: Check secret
-        if: env.SLACK_WEBHOOK_URL == ''
-        run: |
-          echo "::error::SLACK_WEBHOOK_URL secret is not set"
-          exit 1
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
       - name: Post PR merged message
         run: |
           curl -sSf -X POST "$SLACK_WEBHOOK_URL" \
