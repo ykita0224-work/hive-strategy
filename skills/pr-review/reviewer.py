@@ -142,6 +142,7 @@ def review_diff(
             body=f"{severity_emoji.get(c['severity'], '•')} **{c['severity'].upper()}** — {c['body']}",
         )
         for c in result.get("comments", [])
+        if isinstance(c, dict) and "path" in c and "line" in c and "severity" in c and "body" in c
     ]
 
     return result["summary"], comments, message.usage
