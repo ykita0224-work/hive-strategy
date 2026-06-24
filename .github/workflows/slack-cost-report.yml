@@ -28,9 +28,9 @@ jobs:
             exit 0
           fi
 
-          INPUT=$(echo "$COST_JSON" | jq '.input_tokens')
-          OUTPUT=$(echo "$COST_JSON" | jq '.output_tokens')
-          RUNS=$(echo "$COST_JSON" | jq '.runs')
+          INPUT=$(echo "$COST_JSON" | jq '.input_tokens // 0')
+          OUTPUT=$(echo "$COST_JSON" | jq '.output_tokens // 0')
+          RUNS=$(echo "$COST_JSON" | jq '.runs // 0')
           TOTAL_USD=$(echo "$COST_JSON" | jq '.total_usd')
 
           if [ "$TOTAL_USD" = "null" ] || [ -z "$TOTAL_USD" ] || ! [[ "$TOTAL_USD" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then

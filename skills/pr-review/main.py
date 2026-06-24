@@ -122,7 +122,7 @@ def main() -> None:
         return
     print(f"[review] {len(comments)} issue(s) found")
 
-    if usage:
+    if usage is not None:
         try:
             _upsert_cost_comment(repo, pr_number, github_token,
                                  usage.input_tokens, usage.output_tokens)
