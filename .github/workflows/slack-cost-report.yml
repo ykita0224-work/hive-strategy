@@ -32,7 +32,7 @@ jobs:
           OUTPUT=$(echo "$COST_JSON" | jq '.output_tokens // 0')
           RUNS=$(echo "$COST_JSON" | jq '.runs // 0')
           TOTAL_USD=$(echo "$COST_JSON" | jq '.total_usd')
-          MODEL_NAME=$(echo "$COST_JSON" | jq -r '.model // "unknown"')
+          MODEL_NAME=$(echo "$COST_JSON" | jq -r '.model // "unknown"' | tr -cd 'A-Za-z0-9._-')
 
           if [ "$TOTAL_USD" = "null" ] || [ -z "$TOTAL_USD" ] || ! [[ "$TOTAL_USD" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
             echo "Malformed cost JSON (total_usd=$TOTAL_USD) — skipping Slack notification"
