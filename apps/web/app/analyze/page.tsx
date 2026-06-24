@@ -88,17 +88,18 @@ function AnalyzeContent() {
 
   const runAnalysis = () => {
     if (running) return;
-    setRunning(true);
-    setStatuses(Object.fromEntries(AGENTS.map((a) => [a.id, "thinking"])));
-    setTexts(Object.fromEntries(AGENTS.map((a) => [a.id, ""])));
+
+    timerRefs.current.forEach(clearTimeout);
+    timerRefs.current = [];
 
     if (AGENTS.length === 0) {
       setRunning(false);
       return;
     }
 
-    timerRefs.current.forEach(clearTimeout);
-    timerRefs.current = [];
+    setRunning(true);
+    setStatuses(Object.fromEntries(AGENTS.map((a) => [a.id, "thinking"])));
+    setTexts(Object.fromEntries(AGENTS.map((a) => [a.id, ""])));
 
     AGENTS.forEach((agent, i) => {
       const id = setTimeout(() => {
