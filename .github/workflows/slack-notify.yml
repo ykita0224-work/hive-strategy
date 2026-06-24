@@ -27,7 +27,7 @@ jobs:
               --arg base "$BASE_REF" \
               --arg head "$HEAD_REF" \
               '{channel: $channel, text: ("*New PR opened* — <" + $url + "|#" + $num + ": " + $title + ">"), blocks: [{type:"section",text:{type:"mrkdwn",text:(":github: *New PR opened*\n<" + $url + "|#" + $num + ": " + $title + ">\n*Author:* " + $author + "\n*Base:* `" + $base + "` ← `" + $head + "`")}}]}'
-            )")
+            )") || { echo "::error::curl failed with exit code $?"; exit 1; }
 
           echo "Slack response: $RESPONSE"
           if [ "$(echo "$RESPONSE" | jq -r '.ok')" != "true" ]; then
@@ -92,7 +92,7 @@ jobs:
           RESPONSE=$(curl -sSf -X POST "https://slack.com/api/chat.postMessage" \
             -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
             -H "Content-Type: application/json; charset=utf-8" \
-            -d "$PAYLOAD")
+            -d "$PAYLOAD") || { echo "::error::curl failed with exit code $?"; exit 1; }
 
           echo "Slack response: $RESPONSE"
           if [ "$(echo "$RESPONSE" | jq -r '.ok')" != "true" ]; then
