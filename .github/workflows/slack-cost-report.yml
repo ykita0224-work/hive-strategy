@@ -20,7 +20,7 @@ jobs:
 
           COST_JSON=$(echo "$COMMENTS" | jq -r '
             .[] | .body | select(contains("<!-- pr-cost-data:")) |
-            capture("<!-- pr-cost-data: (?P<json>\\{[^}]+\\}) -->") | .json
+            capture("<!-- pr-cost-data: (?P<json>.+?) -->") | .json
           ' | tail -1)
 
           if [ -z "$COST_JSON" ]; then
@@ -38,10 +38,6 @@ jobs:
           curl -sSf -X POST "$SLACK_COST_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
             -d "$(jq -n \
-              --arg pr_url "$PR_URL" \
-              --arg pr_num "$PR_NUMBER" \
-              --arg pr_title "$PR_TITLE" \
-              --arg author "$PR_AUTHOR" \
               --argjson input "$INPUT" \
               --argjson output "$OUTPUT" \
               --argjson runs "$RUNS" \
@@ -54,8 +50,8 @@ jobs:
                     text: {
                       type: "mrkdwn",
                       text: (
-                        ":moneybag: *PR #" + $pr_num + " merged* — <" + $pr_url + "|" + $pr_title + ">\n"
-                        + "*Author:* " + $author + "\n"
+                        ":moneybag: *PR #" + $ENV.PR_NUMBER + " merged* — <" + $ENV.PR_URL + "|" + $ENV.PR_TITLE + ">\n"
+                        + "*Author:* " + $ENV.PR_AUTHOR + "\n"
                         + "*Review runs:* " + ($runs | tostring) + "\n"
                         + "*Tokens:* " + ($input | tostring) + " in / " + ($output | tostring) + " out\n"
                         + "*Cost:* $" + $usd + " / ¥" + $jpy

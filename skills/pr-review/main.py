@@ -58,13 +58,14 @@ def _upsert_cost_comment(
     existing = next((c for c in comments if COST_MARKER in c.get("body", "")), None)
 
     if existing:
-        match = re.search(r"<!-- pr-cost-data: ({.*?}) -->", existing["body"])
+        match = re.search(r"<!-- pr-cost-data: (.+?) -->", existing["body"])
         if match:
             prior = json.loads(match.group(1))
             input_tokens += prior.get("input_tokens", 0)
             output_tokens += prior.get("output_tokens", 0)
             runs = prior.get("runs", 0) + 1
         else:
+            print("[cost] Warning: existing cost comment found but could not parse JSON — prior history discarded", file=sys.stderr)
             runs = 1
     else:
         runs = 1
