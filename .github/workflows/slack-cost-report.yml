@@ -16,7 +16,7 @@ jobs:
           COMMENTS=$(curl -sSf \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments")
+            "https://api.github.com/repos/$REPO/issues/$PR_NUMBER/comments?per_page=100")
 
           COST_JSON=$(echo "$COMMENTS" | jq -r '
             .[] | .body | select(contains("<!-- pr-cost-data:")) |
