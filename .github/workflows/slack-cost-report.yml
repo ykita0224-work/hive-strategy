@@ -20,7 +20,7 @@ jobs:
 
           COST_JSON=$(echo "$COMMENTS" | jq -r '
             .[] | .body | select(contains("<!-- pr-cost-data:")) |
-            capture("<!-- pr-cost-data: (?P<json>.+?) -->") | .json
+            capture("<!-- pr-cost-data: (?<json>.+?) -->") | .json
           ' | tail -1)
 
           if [ -z "$COST_JSON" ]; then
@@ -32,6 +32,7 @@ jobs:
           OUTPUT=$(echo "$COST_JSON" | jq '.output_tokens // 0')
           RUNS=$(echo "$COST_JSON" | jq '.runs // 0')
           TOTAL_USD=$(echo "$COST_JSON" | jq '.total_usd')
+          MODEL_NAME=$(echo "$COST_JSON" | jq -r '.model // "unknown"' | tr -cd 'A-Za-z0-9._-')
 
           if [ "$TOTAL_USD" = "null" ] || [ -z "$TOTAL_USD" ] || ! [[ "$TOTAL_USD" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
             echo "Malformed cost JSON (total_usd=$TOTAL_USD) — skipping Slack notification"
@@ -49,6 +50,7 @@ jobs:
               --argjson runs "$RUNS" \
               --arg usd "$TOTAL_USD_FMT" \
               --arg jpy "$TOTAL_JPY" \
+              --arg model "$MODEL_NAME" \
               '{
                 blocks: [
                   {
@@ -58,6 +60,7 @@ jobs:
                       text: (
                         ":moneybag: *PR #" + $ENV.PR_NUMBER + " merged* — <" + $ENV.PR_URL + "|" + $ENV.PR_TITLE + ">\n"
                         + "*Author:* " + $ENV.PR_AUTHOR + "\n"
+                        + "*Model:* " + $model + "\n"
                         + "*Review runs:* " + ($runs | tostring) + "\n"
                         + "*Tokens:* " + ($input | tostring) + " in / " + ($output | tostring) + " out\n"
                         + "*Cost:* $" + $usd + " / ¥" + $jpy
