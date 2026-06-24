@@ -2,6 +2,8 @@ import anthropic
 from anthropic.types import Usage
 from github import PRFile, ReviewComment
 
+MODEL = "claude-sonnet-4-6"
+
 SYSTEM_PROMPT = """You are a senior software engineer performing a thorough code review.
 Analyze the provided git diff and identify real, actionable issues only.
 
@@ -105,7 +107,7 @@ def review_diff(
         user_content = f"{existing_block}\n\n---\n\n{user_content}"
 
     message = client.messages.create(
-        model="claude-sonnet-4-6",
+        model=MODEL,
         max_tokens=4096,
         system=SYSTEM_PROMPT,
         tools=[REVIEW_TOOL],

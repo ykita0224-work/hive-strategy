@@ -24,7 +24,7 @@ import anthropic
 import httpx
 
 from github import get_pr_files, get_pr_commit_sha, get_existing_review_comments, post_review
-from reviewer import review_diff
+from reviewer import review_diff, MODEL
 
 INPUT_PRICE_PER_M = 3.00
 OUTPUT_PRICE_PER_M = 15.00
@@ -74,13 +74,13 @@ def _upsert_cost_comment(
                  + output_tokens / 1_000_000 * OUTPUT_PRICE_PER_M)
     total_jpy = total_usd * JPY_PER_USD
 
-    data = {"input_tokens": input_tokens, "output_tokens": output_tokens,
+    data = {"model": MODEL, "input_tokens": input_tokens, "output_tokens": output_tokens,
             "runs": runs, "total_usd": round(total_usd, 6)}
     body = (
         f"{COST_MARKER} {json.dumps(data)} -->\n"
-        f"💰 Review run #{runs} — "
-        f"{input_tokens:,} in / {output_tokens:,} out tokens — "
-        f"${total_usd:.4f} / ¥{total_jpy:.1f}"
+        f"**Model:** {MODEL}\n"
+        f"**Token Usage:** {input_tokens:,} / {output_tokens:,}\n"
+        f"**Cost:** ${total_usd:.4f} / ¥{total_jpy:.1f}"
     )
 
     headers = _gh_headers(token)
