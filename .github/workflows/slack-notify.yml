@@ -55,11 +55,17 @@ jobs:
     name: Notify Slack — Merged
     if: github.event.action == 'closed' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
     steps:
       - name: Post merged reply to Slack thread
         run: |
           SLACK_TS=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
-            --jq '[.[] | select(.body | startswith("<!-- slack-thread-ts:"))] | last | .body | ltrimstr("<!-- slack-thread-ts: ") | rtrimstr(" -->")')
+            --jq '[.[] | select(.body | startswith("<!-- slack-thread-ts:"))] | first | .body | ltrimstr("<!-- slack-thread-ts: ") | rtrimstr(" -->")')
+
+          if [ -z "$SLACK_TS" ] || [ "$SLACK_TS" = "null" ]; then
+            echo "::warning::No slack-thread-ts comment found for PR #$PR_NUMBER — posting as top-level message"
+          fi
 
           PAYLOAD=$(jq -n \
             --arg channel "$SLACK_CHANNEL_ID" \
@@ -77,10 +83,16 @@ jobs:
              + {text: ("*PR merged* — <" + $url + "|#" + $num + ": " + $title + ">"),
                 blocks: [{type:"section",text:{type:"mrkdwn",text:(":merged: *PR merged*\n<" + $url + "|#" + $num + ": " + $title + ">\n*Author:* " + $author + "   *Merged by:* " + $merger + "\n*Into:* `" + $base + "`")}}]}')
 
-          curl -sSf -X POST "https://slack.com/api/chat.postMessage" \
+          RESPONSE=$(curl -sSf -X POST "https://slack.com/api/chat.postMessage" \
             -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
             -H "Content-Type: application/json; charset=utf-8" \
-            -d "$PAYLOAD"
+            -d "$PAYLOAD")
+
+          echo "Slack response: $RESPONSE"
+          if [ "$(echo "$RESPONSE" | jq -r '.ok')" != "true" ]; then
+            echo "::error::Slack API error: $(echo "$RESPONSE" | jq -r '.error')"
+            exit 1
+          fi
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
