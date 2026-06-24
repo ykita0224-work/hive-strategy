@@ -51,9 +51,17 @@ Group all comments by thread (root comment + its replies, linked via `in_reply_t
 
 Mark circular threads with decision `ARGUE_CIRCULAR` (see Step 3).
 
-## Step 2 — Read the code
+## Step 2 — Read the code and standards
 
-For each open comment, read the full file it references. Do not judge from the diff alone.
+Read the project coding standards so any FIX you apply is consistent with the codebase conventions:
+
+```bash
+REPO_ROOT=$(git rev-parse --show-toplevel)
+cat "$REPO_ROOT/docs/coding-standards.md"
+cat "$REPO_ROOT/docs/directory-structure.md"
+```
+
+Then read the full file referenced by each open comment. Do not judge from the diff alone.
 
 ## Step 3 — Decide for each comment
 

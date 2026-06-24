@@ -88,7 +88,14 @@ All subsequent work happens inside `<WORKTREE>`.
 
 ## Step 3 — Implement
 
-Read existing code before editing. Do only what the task requires — no extra features, no cleanup beyond scope.
+Before writing any code, read the project coding standards:
+
+```bash
+cat <REPO_ROOT>/docs/coding-standards.md
+cat <REPO_ROOT>/docs/directory-structure.md
+```
+
+Use these to decide where new files go and how they should be written. Then read existing code before editing. Do only what the task requires — no extra features, no cleanup beyond scope.
 
 ---
 
