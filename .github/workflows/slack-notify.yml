@@ -12,19 +12,22 @@ jobs:
     steps:
       - name: Post PR opened message
         run: |
-          curl -s -X POST "$SLACK_WEBHOOK_URL" \
+          curl -sSf -X POST "$SLACK_WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{
-              \"text\": \"*New PR opened* — <${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}>\",
-              \"blocks\": [
-                {
-                  \"type\": \"section\",
-                  \"text\": {
-                    \"type\": \"mrkdwn\",
-                    \"text\": \":github: *New PR opened*\n<${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}>\n*Author:* ${{ github.event.pull_request.user.login }}\n*Base:* \`${{ github.base_ref }}\` ← \`${{ github.head_ref }}\`\"
-                  }
-                }
-              ]
-            }"
+            -d "$(jq -n \
+              --arg url "$PR_URL" \
+              --arg num "$PR_NUMBER" \
+              --arg title "$PR_TITLE" \
+              --arg author "$PR_AUTHOR" \
+              --arg base "$BASE_REF" \
+              --arg head "$HEAD_REF" \
+              '{text: ("*New PR opened* — <" + $url + "|#" + $num + ": " + $title + ">"), blocks: [{type:"section",text:{type:"mrkdwn",text:(":github: *New PR opened*\n<" + $url + "|#" + $num + ": " + $title + ">\n*Author:* " + $author + "\n*Base:* `" + $base + "` ← `" + $head + "`")}}]}'
+            )"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
