@@ -5,14 +5,15 @@ SSE stream that runs all 6 analyst agents in parallel against Claude claude-sonn
 
 Event types emitted:
   {"type": "start",  "agentIds": [...]}
-  {"type": "chunk",  "id": "<agentId>", "text": "<delta>"}   — streaming token
-  {"type": "agent",  "id": "<agentId>", "text": "<full>"}    — agent finished
-  {"type": "error",  "message": "<msg>"}
-  {"type": "done"}
+  {"type": "chunk",  "id": "<agentId>", "text": "<delta>"}        — streaming token
+  {"type": "agent",  "id": "<agentId>", "text": "<full>"}         — agent finished
+  {"type": "error",  "id": "<agentId>", "message": "<generic>"}   — agent failed
+  {"type": "done",   "failedAgentIds": [...]}                      — all agents complete
 """
 
 import asyncio
 import json
+import logging
 import os
 
 import anthropic
@@ -20,6 +21,8 @@ from fastapi import APIRouter, Query
 from sse_starlette.sse import EventSourceResponse
 
 from agents import AGENTS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -54,13 +57,14 @@ async def _run_agent(
 
         await queue.put({"type": "agent", "id": agent_id, "text": full_text})
     except Exception as exc:
-        await queue.put({"type": "error", "message": str(exc)})
+        logger.error("Agent %s failed: %s", agent_id, exc, exc_info=True)
+        await queue.put({"type": "error", "id": agent_id, "message": "Agent failed. Please try again."})
 
 
 @router.get("/stream")
 async def analyze_stream(idea: str = Query(..., max_length=MAX_IDEA_LEN)):
     async def event_generator():
-        client = anthropic.AsyncAnthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         queue: asyncio.Queue = asyncio.Queue()
 
         agent_ids = [a.id for a in AGENTS]
@@ -75,14 +79,18 @@ async def analyze_stream(idea: str = Query(..., max_length=MAX_IDEA_LEN)):
 
         finished = 0
         total = len(tasks)
+        failed_agent_ids: list[str] = []
 
         while finished < total:
             event = await queue.get()
             yield {"data": json.dumps(event)}
-            if event["type"] in ("agent", "error"):
+            if event["type"] == "agent":
+                finished += 1
+            elif event["type"] == "error":
+                failed_agent_ids.append(event["id"])
                 finished += 1
 
         await asyncio.gather(*tasks, return_exceptions=True)
-        yield {"data": json.dumps({"type": "done"})}
+        yield {"data": json.dumps({"type": "done", "failedAgentIds": failed_agent_ids})}
 
     return EventSourceResponse(event_generator())
